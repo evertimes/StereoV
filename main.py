@@ -1,0 +1,160 @@
+import math
+import time
+
+import cv2
+import numpy as np
+
+
+def sobel_filter(image):
+    height, width = image.shape
+    filtered_image = np.zeros((height, width))
+    sobel_matrix_x = np.array(([-1, -2, -1], [0, 0, 0], [1, 2, 1]))  # idk
+    sobel_matrix_y = np.array(([-1, 0, 1], [-2, 0, 2], [-1, 0, 1]))  # idk
+    for y in range(2, width - 2):
+        for x in range(2, height - 2):
+            cx, cy = 0, 0
+            for offset_y in range(0, 3):
+                for offset_x in range(0, 3):
+                    pix = image[x + offset_x - 1, y + offset_y - 1]
+                    if offset_x != 1:
+                        cx += pix * sobel_matrix_x[offset_x, offset_y]
+                    if offset_y != 1:
+                        cy += pix * sobel_matrix_y[offset_x, offset_y]
+            out_pix = math.sqrt(cx ** 2 + cy ** 2)
+            filtered_image[x, y] = out_pix if out_pix > 0 else 0
+    np.putmask(filtered_image, filtered_image > 255, 255)
+    return filtered_image
+
+
+def calc_left_disparity(gray_left, gray_right, num_disparity=128, block_size=11):
+    height, width = gray_right.shape
+    disparity_matrix = np.zeros((height, width), dtype=np.float32)
+    half_block = block_size // 2
+
+    for i in range(half_block, height - half_block):
+        print("%d%% " % (i * 100 // height), end=' ', flush=True)
+
+        for j in range(half_block, width - half_block):
+            ##Вырезаем окно. 12 на 12, т.к block-size=13
+            left_block = gray_left[i - half_block:i + half_block, j - half_block:j + half_block]
+            diff_sum = 32767  # Большое значение что бы любое другое было меньше
+            disp = 0  # Изначальный диспаритет для???
+            # right_block = gray_right[i - half_block:i + half_block, j - half_block - d:j + half_block - d]
+            left_img_left_col = gray_left[i - half_block:i + half_block, j - half_block:j - half_block + 1]
+            left_img_right_col = gray_left[i - half_block:i + half_block, j + half_block - 1:j + half_block]
+            #sum_left = 0
+            #sum_right = 0
+            right_block = gray_right[i - half_block:i + half_block, j - half_block:j + half_block]
+            sad_val = sum(sum(abs(right_block - left_block)))  # Разность блоков по модулю и сумма матрицы.
+            for d in range(0, min(j - half_block - 1, num_disparity)):
+                # Вырезаем окно на правом изображении со смещением от 0 до j-пол блока-1 или максимальное смещение
+                #need right_block = gray_right[i - half_block:i + half_block, j - half_block - d:j + half_block - d]
+                # right_block = right_block[i - half_block:i + half_block,j - half_block - d+1:j + half_block - d]
+                # right_block = cv2.hconcat(right_block,)
+                if(d!=0):
+                    right_image_left_col = gray_right[i - half_block:i + half_block,
+                                       j - half_block - d:j - half_block - d + 1]
+                    right_image_right_col = gray_right[i - half_block:i + half_block,
+                                        j + half_block - d - 1:j + half_block - d]
+                    sum_left = sum(sum(abs(right_image_left_col-left_img_left_col)))
+                    sum_right = sum(sum(abs(right_image_right_col-left_img_right_col)))
+                    sad_val = sad_val - sum_left+sum_right
+                #need sad_val = sum(sum(abs(right_block - left_block)))  # Разность блоков по модулю и сумма матрицы.
+                # Самая минимальная разность будет соотвествовать наиболее одинаковым блокам
+                # Disparity Optimization maybe
+                # Если sad меньше чем прошлая сумма, то записываем. Диспаритетом становится
+                # Тот самый диспартет из цикла
+                if sad_val < diff_sum:
+                    diff_sum = sad_val
+                    disp = d
+            # После конца цикла записываем для соотвествующего пикселя соотвествующую диспаритетность
+            disparity_matrix[i - half_block, j - half_block] = disp
+    print('100%')
+    return disparity_matrix
+
+
+# Calculate right disparity
+
+
+def calc_right_disparity(gray_left, gray_right, num_disparity=128, block_size=11):
+    height, width = gray_right.shape
+    disparity_matrix = np.zeros((height, width), dtype=np.float32)
+    half_block = block_size // 2
+
+    for i in range(half_block, height - half_block):
+        print("%d%% " % (i * 100 // height), end=' ', flush=True)
+
+        for j in range(half_block, width - half_block):
+            right_block = gray_right[i - half_block:i + half_block, j - half_block:j + half_block]
+            diff_sum = 32767
+            disp = 0
+
+            for d in range(0, min(width - j - half_block, num_disparity)):
+
+                left_block = gray_left[i - half_block:i +
+                                                      half_block, j - half_block + d:j + half_block + d]
+                sad_val = sum(sum(abs(right_block - left_block)))
+
+                if sad_val < diff_sum:
+                    diff_sum = sad_val
+                    disp = d
+
+            disparity_matrix[i - half_block, j - half_block] = disp
+    print('100%')
+    return disparity_matrix
+
+
+def left_right_check(disp_left, disp_right):
+    height, width = disp_left.shape
+    out_image = disp_left
+
+    for h in range(1, height - 1):
+        for w in range(1, width - 1):
+            left = int(disp_left[h, w])
+            if w - left > 0:
+                right = int(disp_right[h, w - left])
+                dispDiff = left - right
+                if dispDiff < 0:
+                    dispDiff = -dispDiff
+                elif dispDiff > 1:
+                    out_image[h, w] = 0
+    return out_image
+
+
+num_disparity = 48
+block_size = 13
+left = cv2.imread("images/left.png", 0)  # Loading image in greyscale mode;
+right = cv2.imread("images/right.png", 0)  # Loading image in greyscale mode;
+
+# PreFilter
+filtered_left = sobel_filter(left)
+filtered_right = sobel_filter(right)
+cv2.imwrite('sobel_left.bmp', filtered_left)
+
+start_time = time.time()
+disparity_left = calc_left_disparity(filtered_left, filtered_right, num_disparity, block_size)
+print('Duration: %s seconds\n' % (time.time() - start_time))
+cv2.imwrite('disparity_left.bmp', disparity_left)
+disparity_left_color = cv2.applyColorMap(cv2.convertScaleAbs(
+    disparity_left, alpha=256 / num_disparity), cv2.COLORMAP_JET)
+cv2.imwrite('disparity_leftRGB.bmp', disparity_left_color)
+
+# Calculate right disparity
+start_time = time.time()
+disparity_right = calc_right_disparity(
+    filtered_left, filtered_right, num_disparity, block_size)
+print('Duration: %s seconds\n' % (time.time() - start_time))
+disparity_right_color = cv2.applyColorMap(cv2.convertScaleAbs(
+    disparity_right, alpha=256 / num_disparity), cv2.COLORMAP_JET)
+cv2.imwrite('disparity_rightRGB.bmp', disparity_right_color)
+
+disparity = left_right_check(disparity_left, disparity_right)
+
+cv2.imwrite('disparity.bmp', disparity_right)
+
+disparity_color = cv2.applyColorMap(cv2.convertScaleAbs(
+    disparity, alpha=256 / num_disparity), cv2.COLORMAP_JET)
+cv2.imwrite('disparityRGB.bmp', disparity_color)
+cv2.imshow('Left', left)
+cv2.imshow('Disparity RGB', disparity_color)
+cv2.waitKey(60000)
