@@ -40,26 +40,18 @@ def calc_left_disparity(gray_left, gray_right, num_disparity=128, block_size=11)
             diff_sum = 32767  # Большое значение что бы любое другое было меньше
             disp = 0  # Изначальный диспаритет для???
             # right_block = gray_right[i - half_block:i + half_block, j - half_block - d:j + half_block - d]
-            left_img_left_col = gray_left[i - half_block:i + half_block, j - half_block:j - half_block + 1]
-            left_img_right_col = gray_left[i - half_block:i + half_block, j + half_block - 1:j + half_block]
+            #left_img_left_col = gray_left[i - half_block:i + half_block, j - half_block:j - half_block + 1]
+            #left_img_right_col = gray_left[i - half_block:i + half_block, j + half_block - 1:j + half_block]
             #sum_left = 0
             #sum_right = 0
-            right_block = gray_right[i - half_block:i + half_block, j - half_block:j + half_block]
-            sad_val = sum(sum(abs(right_block - left_block)))  # Разность блоков по модулю и сумма матрицы.
+            #right_block = gray_right[i - half_block:i + half_block, j - half_block:j + half_block]
+            #sad_val = sum(sum(abs(right_block - left_block)))  # Разность блоков по модулю и сумма матрицы.
             for d in range(0, min(j - half_block - 1, num_disparity)):
                 # Вырезаем окно на правом изображении со смещением от 0 до j-пол блока-1 или максимальное смещение
-                #need right_block = gray_right[i - half_block:i + half_block, j - half_block - d:j + half_block - d]
+                right_block = gray_right[i - half_block:i + half_block, j - half_block - d:j + half_block - d]
                 # right_block = right_block[i - half_block:i + half_block,j - half_block - d+1:j + half_block - d]
                 # right_block = cv2.hconcat(right_block,)
-                if(d!=0):
-                    right_image_left_col = gray_right[i - half_block:i + half_block,
-                                       j - half_block - d:j - half_block - d + 1]
-                    right_image_right_col = gray_right[i - half_block:i + half_block,
-                                        j + half_block - d - 1:j + half_block - d]
-                    sum_left = sum(sum(abs(right_image_left_col-left_img_left_col)))
-                    sum_right = sum(sum(abs(right_image_right_col-left_img_right_col)))
-                    sad_val = sad_val - sum_left+sum_right
-                #need sad_val = sum(sum(abs(right_block - left_block)))  # Разность блоков по модулю и сумма матрицы.
+                sad_val = sum(sum(abs(right_block - left_block)))  # Разность блоков по модулю и сумма матрицы.
                 # Самая минимальная разность будет соотвествовать наиболее одинаковым блокам
                 # Disparity Optimization maybe
                 # Если sad меньше чем прошлая сумма, то записываем. Диспаритетом становится
