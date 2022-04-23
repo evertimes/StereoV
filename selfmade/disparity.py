@@ -39,13 +39,6 @@ def calc_left_disparity(gray_left, gray_right, num_disparity=128, block_size=11)
             left_block = gray_left[i - half_block:i + half_block, j - half_block:j + half_block]
             diff_sum = 32767  # Большое значение что бы любое другое было меньше
             disp = 0  # Изначальный диспаритет для???
-            # right_block = gray_right[i - half_block:i + half_block, j - half_block - d:j + half_block - d]
-            #left_img_left_col = gray_left[i - half_block:i + half_block, j - half_block:j - half_block + 1]
-            #left_img_right_col = gray_left[i - half_block:i + half_block, j + half_block - 1:j + half_block]
-            #sum_left = 0
-            #sum_right = 0
-            #right_block = gray_right[i - half_block:i + half_block, j - half_block:j + half_block]
-            #sad_val = sum(sum(abs(right_block - left_block)))  # Разность блоков по модулю и сумма матрицы.
             for d in range(0, min(j - half_block - 1, num_disparity)):
                 # Вырезаем окно на правом изображении со смещением от 0 до j-пол блока-1 или максимальное смещение
                 right_block = gray_right[i - half_block:i + half_block, j - half_block - d:j + half_block - d]
@@ -61,7 +54,7 @@ def calc_left_disparity(gray_left, gray_right, num_disparity=128, block_size=11)
                     disp = d
             # После конца цикла записываем для соотвествующего пикселя соотвествующую диспаритетность
             disparity_matrix[i - half_block, j - half_block] = disp
-            print(disp)
+            # print(disp)
     print('100%')
     return disparity_matrix
 
@@ -113,43 +106,36 @@ def left_right_check(disp_left, disp_right):
                     out_image[h, w] = 0
     return out_image
 
+def getDisparityMap(left_image_path,right_image_path,num_diparity,block_size,save_intermediate):
+    start_time = time.time()
+    left = cv2.imread(left_image_path, 0)
+    right = cv2.imread(right_image_path, 0)
+    filtered_left = sobel_filter(left)
+    filtered_right = sobel_filter(right)
 
+
+    disparity_left = calc_left_disparity(filtered_left, filtered_right, num_disparity, block_size)
+    disparity_right = calc_right_disparity(
+        filtered_left, filtered_right, num_disparity, block_size)
+    disparity = left_right_check(disparity_left, disparity_right)
+    print('Duration: %s seconds\n' % (time.time() - start_time))
+    if save_intermediate==True:
+        cv2.imwrite('output/sobel_left.bmp', filtered_left)
+        cv2.imwrite('sobel_right.bmp', filtered_right)
+        cv2.imwrite('output/disparity_left.bmp', disparity_left)
+        cv2.imwrite('disparity_right.bmp', disparity_left)
+        disparity_left_color = cv2.applyColorMap(cv2.convertScaleAbs(
+            disparity_left, alpha=256 / num_disparity), cv2.COLORMAP_JET)
+        cv2.imwrite('output/disparity_leftRGB.bmp', disparity_left_color)
+        disparity_right_color = cv2.applyColorMap(cv2.convertScaleAbs(
+            disparity_right, alpha=256 / num_disparity), cv2.COLORMAP_JET)
+        cv2.imwrite('output/disparity_rightRGB.bmp', disparity_right_color)
+    #cv2.imwrite('disparity.bmp', disparity)
+    return disparity
 num_disparity = 64 #48
 block_size = 13
-left = cv2.imread("images/im0.png", 0)  # Loading image in greyscale mode;
-right = cv2.imread("images/im1.png", 0)  # Loading image in greyscale mode;
 
-# PreFilter
-filtered_left = sobel_filter(left)
-filtered_right = sobel_filter(right)
-cv2.imwrite('sobel_left.bmp', filtered_left)
 
-start_time = time.time()
-disparity_left = calc_left_disparity(filtered_left, filtered_right, num_disparity, block_size)
-print('Duration: %s seconds\n' % (time.time() - start_time))
-cv2.imwrite('disparity_left.bmp', disparity_left)
-disparity_left_color = cv2.applyColorMap(cv2.convertScaleAbs(
-    disparity_left, alpha=256 / num_disparity), cv2.COLORMAP_JET)
-cv2.imwrite('disparity_leftRGB.bmp', disparity_left_color)
 
-# Calculate right disparity
-start_time = time.time()
-disparity_right = calc_right_disparity(
-    filtered_left, filtered_right, num_disparity, block_size)
-print('Duration: %s seconds\n' % (time.time() - start_time))
-disparity_right_color = cv2.applyColorMap(cv2.convertScaleAbs(
-    disparity_right, alpha=256 / num_disparity), cv2.COLORMAP_JET)
-cv2.imwrite('disparity_rightRGB.bmp', disparity_right_color)
 
-disparity = left_right_check(disparity_left, disparity_right)
-f=624.183
-B=176.252
-depth = B*f/disparity
-cv2.imwrite('disparity.bmp', disparity)
-cv2.imwrite('depth.bmp',depth)
-disparity_color = cv2.applyColorMap(cv2.convertScaleAbs(
-    disparity, alpha=256 / num_disparity), cv2.COLORMAP_JET)
-cv2.imwrite('disparityRGB.bmp', disparity_color)
-cv2.imshow('Left', left)
-cv2.imshow('Disparity RGB', disparity_color)
-cv2.waitKey(60000)
+
