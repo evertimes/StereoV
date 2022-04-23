@@ -51,7 +51,7 @@ def calc_left_disparity(gray_left, gray_right, num_disparity=128, block_size=11)
                 right_block = gray_right[i - half_block:i + half_block, j - half_block - d:j + half_block - d]
                 # right_block = right_block[i - half_block:i + half_block,j - half_block - d+1:j + half_block - d]
                 # right_block = cv2.hconcat(right_block,)
-                sad_val = sum(sum(abs(right_block - left_block)))  # Разность блоков по модулю и сумма матрицы.
+                sad_val = np.sum(np.sum(np.abs(right_block - left_block)))  # Разность блоков по модулю и сумма матрицы.
                 # Самая минимальная разность будет соотвествовать наиболее одинаковым блокам
                 # Disparity Optimization maybe
                 # Если sad меньше чем прошлая сумма, то записываем. Диспаритетом становится
@@ -61,6 +61,7 @@ def calc_left_disparity(gray_left, gray_right, num_disparity=128, block_size=11)
                     disp = d
             # После конца цикла записываем для соотвествующего пикселя соотвествующую диспаритетность
             disparity_matrix[i - half_block, j - half_block] = disp
+            print(disp)
     print('100%')
     return disparity_matrix
 
@@ -85,7 +86,7 @@ def calc_right_disparity(gray_left, gray_right, num_disparity=128, block_size=11
 
                 left_block = gray_left[i - half_block:i +
                                                       half_block, j - half_block + d:j + half_block + d]
-                sad_val = sum(sum(abs(right_block - left_block)))
+                sad_val = np.sum(np.sum(np.abs(right_block - left_block)))
 
                 if sad_val < diff_sum:
                     diff_sum = sad_val
@@ -113,10 +114,10 @@ def left_right_check(disp_left, disp_right):
     return out_image
 
 
-num_disparity = 48
+num_disparity = 64 #48
 block_size = 13
-left = cv2.imread("images/left.png", 0)  # Loading image in greyscale mode;
-right = cv2.imread("images/right.png", 0)  # Loading image in greyscale mode;
+left = cv2.imread("images/im0.png", 0)  # Loading image in greyscale mode;
+right = cv2.imread("images/im1.png", 0)  # Loading image in greyscale mode;
 
 # PreFilter
 filtered_left = sobel_filter(left)
@@ -141,9 +142,11 @@ disparity_right_color = cv2.applyColorMap(cv2.convertScaleAbs(
 cv2.imwrite('disparity_rightRGB.bmp', disparity_right_color)
 
 disparity = left_right_check(disparity_left, disparity_right)
-
-cv2.imwrite('disparity.bmp', disparity_right)
-
+f=624.183
+B=176.252
+depth = B*f/disparity
+cv2.imwrite('disparity.bmp', disparity)
+cv2.imwrite('depth.bmp',depth)
 disparity_color = cv2.applyColorMap(cv2.convertScaleAbs(
     disparity, alpha=256 / num_disparity), cv2.COLORMAP_JET)
 cv2.imwrite('disparityRGB.bmp', disparity_color)
