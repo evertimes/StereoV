@@ -1,13 +1,28 @@
+import os.path
+from threading import Thread
 import math
-import ThreadWithReturnValue as twrv
-import time
-
 import cv2
 import numpy as np
+import sys
+
+
+class ThreadWithReturnValue(Thread):
+    def __init__(self, group=None, target=None, name=None,
+                 args=(), kwargs={}, Verbose=None):
+        Thread.__init__(self, group, target, name, args, kwargs)
+        self._return = None
+
+    def run(self):
+        if self._target is not None:
+            self._return = self._target(*self._args,
+                                        **self._kwargs)
+
+    def join(self, *args):
+        Thread.join(self, *args)
+        return self._return
 
 
 def sobel_filter(image):
-    print("start sobel")
     height, width = image.shape
     result = np.zeros((height, width))  # Empty result
     sobel_x_mask = np.array(([-1, -2, -1], [0, 0, 0], [1, 2, 1]))  # Sobel horizontal mask
@@ -25,18 +40,15 @@ def sobel_filter(image):
             out_pix = math.sqrt(cx ** 2 + cy ** 2)  # Calculating gradient
             result[x, y] = out_pix if out_pix > 0 else 0  # Filtered result
     np.putmask(result, result > 255, 255)  # Normailizng
-    print("stop sobel")
     return result
 
 
 def calc_left_disparity(gray_left, gray_right, num_disparity, block_size):
-    print("start left disp")
     height, width = gray_right.shape
     disparity_matrix = np.zeros((height, width), dtype=np.float32)
     half_block = block_size // 2
 
     for i in range(half_block, height - half_block):
-        # print("%d%% " % (i * 100 // height), end=' ', flush=True)
 
         for j in range(half_block, width - half_block):
             ##Вырезаем окно blocksizexblocksize
@@ -107,40 +119,51 @@ def cross_check(disp_left, disp_right):
 
 
 def getDisparityMap(left_image_path, right_image_path, num_disparity, block_size, save_intermediate):
-    start_time = time.time()
     left = cv2.imread(left_image_path, 0)
     right = cv2.imread(right_image_path, 0)
-    t = twrv.ThreadWithReturnValue(target=sobel_filter, args=[left])
-    t2 = twrv.ThreadWithReturnValue(target=sobel_filter, args=[right])
+    t = ThreadWithReturnValue(target=sobel_filter, args=[left])
+    t2 = ThreadWithReturnValue(target=sobel_filter, args=[right])
+    print("Start sobel")
     t.start()
     t2.start()
     filtered_left = t.join()
     filtered_right = t2.join()
-    t = twrv.ThreadWithReturnValue(target=calc_left_disparity,
-                                   args=[filtered_left, filtered_right, num_disparity, block_size])
-    t2 = twrv.ThreadWithReturnValue(target=calc_right_disparity,
-                                    args=[filtered_left, filtered_right, num_disparity, block_size])
+    t = ThreadWithReturnValue(target=calc_left_disparity,
+                              args=[filtered_left, filtered_right, num_disparity, block_size])
+    t2 = ThreadWithReturnValue(target=calc_right_disparity,
+                               args=[filtered_left, filtered_right, num_disparity, block_size])
+    print("Start disparity")
     t.start()
     t2.start()
     disparity_left = t.join()
     disparity_right = t2.join()
     disparity = cross_check(disparity_left, disparity_right)
-    print('Duration: %s seconds\n' % (time.time() - start_time))
     if save_intermediate:
         cv2.imwrite('output/sobel_left.png', filtered_left)
         cv2.imwrite('output/sobel_right.png', filtered_right)
         cv2.imwrite('output/disparity_left.png', disparity_left)
         cv2.imwrite('output/disparity_right.png', disparity_right)
-        # disparity_left_color = cv2.applyColorMap(cv2.convertScaleAbs(
-        #    disparity_left, alpha=256 / num_disparity), cv2.COLORMAP_JET)
-        # cv2.imwrite('output/disparity_leftRGB.png', disparity_left_color)
-        # disparity_right_color = cv2.applyColorMap(cv2.convertScaleAbs(
-        #    disparity_right, alpha=256 / num_disparity), cv2.COLORMAP_JET)
-        # cv2.imwrite('output/disparity_rightRGB.png', disparity_right_color)
-    ##cv2.imwrite('disparity.bmp', disparity)
     return disparity
+
 
 def getDepthMap(disparity, baseline, fx):
     depth = np.zeros(shape=disparity.shape).astype(float)
     depth[disparity > 0] = (fx * baseline) / (disparity[disparity > 0] + 40)
     return depth
+
+
+def run(left_image, right_image, num_disparity, block_size, baseline, fx, save):
+    if not os.path.exists(left_image):
+        print("Path "+left_image+"doesnt exists")
+        return
+    if not os.path.exists(right_image):
+        print("Path "+right_image+"doesnt exists")
+        return
+    #disparity = getDisparityMap(left_image, right_image, num_disparity, block_size, save)
+    disparity = cv2.imread("../images/znewkuba.png")
+    depth = getDepthMap(disparity, baseline, fx)
+    cv2.imwrite("output/disparity.png", disparity)
+    cv2.imwrite("output/depth.png", depth)
+
+
+run(sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4]), int(sys.argv[5]), int(sys.argv[6]), bool(sys.argv[7]))
